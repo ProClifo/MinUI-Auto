@@ -3005,13 +3005,12 @@ void Core_close(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
-#define MENU_SLOT_COUNT 8
+#define MENU_ITEM_COUNT 4
+#define MENU_SLOT_COUNT 1
 
 enum {
 	ITEM_CONT,
-	ITEM_SAVE,
-	ITEM_LOAD,
+	ITEM_RESTART,
 	ITEM_OPTS,
 	ITEM_QUIT,
 };
@@ -3051,10 +3050,9 @@ static struct {
 	
 	.items = {
 		[ITEM_CONT] = "Continue",
-		[ITEM_SAVE] = "Save",
-		[ITEM_LOAD] = "Load",
+		[ITEM_RESTART] = "Restart Game",
 		[ITEM_OPTS] = "Options",
-		[ITEM_QUIT] = "Quit",
+		[ITEM_QUIT] = "Save & Quit",
 	}
 };
 
@@ -4106,8 +4104,8 @@ static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 }
 
 static void Menu_initState(void) {
-	if (exists(menu.slot_path)) menu.slot = getInt(menu.slot_path);
-	if (menu.slot==8) menu.slot = 0;
+	menu.slot = AUTO_RESUME_SLOT;
+	putInt(menu.slot_path, menu.slot);
 	
 	menu.save_exists = 0;
 	menu.preview_exists = 0;
@@ -4278,8 +4276,6 @@ static void Menu_loop(void) {
 	int ignore_menu = 0;
 	int menu_start = 0;
 	
-	SDL_Surface* preview = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH/2,DEVICE_HEIGHT/2,FIXED_DEPTH,RGBA_MASK_565); // TODO: retain until changed?
-	
 	while (show_menu) {
 		GFX_startFrame();
 		uint32_t now = SDL_GetTicks();
@@ -4303,11 +4299,6 @@ static void Menu_loop(void) {
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
-				menu.slot -= 1;
-				if (menu.slot<0) menu.slot += MENU_SLOT_COUNT;
-				dirty = 1;
-			}
 		}
 		else if (PAD_justPressed(BTN_RIGHT)) {
 			if (menu.total_discs>1 && selected==ITEM_CONT) {
@@ -4316,14 +4307,9 @@ static void Menu_loop(void) {
 				dirty = 1;
 				sprintf(disc_name, "Disc %i", menu.disc+1);
 			}
-			else if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
-				menu.slot += 1;
-				if (menu.slot>=MENU_SLOT_COUNT) menu.slot -= MENU_SLOT_COUNT;
-				dirty = 1;
-			}
 		}
 		
-		if (dirty && (selected==ITEM_SAVE || selected==ITEM_LOAD)) {
+		if (dirty) {
 			Menu_updateState();
 		}
 		
@@ -4334,7 +4320,7 @@ static void Menu_loop(void) {
 		else if (PAD_justPressed(BTN_A)) {
 			switch(selected) {
 				case ITEM_CONT:
-				if (menu.total_discs && rom_disc!=menu.disc) {
+					if (menu.total_discs && rom_disc!=menu.disc) {
 						status = STATUS_DISC;
 						char* disc_path = menu.disc_paths[menu.disc];
 						Game_changeDisc(disc_path);
@@ -4344,18 +4330,10 @@ static void Menu_loop(void) {
 					}
 					show_menu = 0;
 				break;
-				
-				case ITEM_SAVE: {
-					Menu_saveState();
-					status = STATUS_SAVE;
+				case ITEM_RESTART:
+					core.reset();
+					status = STATUS_RESET;
 					show_menu = 0;
-				}
-				break;
-				case ITEM_LOAD: {
-					Menu_loadState();
-					status = STATUS_LOAD;
-					show_menu = 0;
-				}
 				break;
 				case ITEM_OPTS: {
 					if (simple_mode) {
@@ -4382,6 +4360,7 @@ static void Menu_loop(void) {
 				}
 				break;
 				case ITEM_QUIT:
+					Menu_saveState();
 					status = STATUS_QUIT;
 					show_menu = 0;
 					quit = 1; // TODO: tmp?
@@ -4483,52 +4462,6 @@ static void Menu_loop(void) {
 				SDL_FreeSurface(text);
 			}
 			
-			// slot preview
-			if (selected==ITEM_SAVE || selected==ITEM_LOAD) {
-				#define WINDOW_RADIUS 4 // TODO: this logic belongs in blitRect?
-				#define PAGINATION_HEIGHT 6
-				// unscaled
-				int hw = DEVICE_WIDTH / 2;
-				int hh = DEVICE_HEIGHT / 2;
-				int pw = hw + SCALE1(WINDOW_RADIUS*2);
-				int ph = hh + SCALE1(WINDOW_RADIUS*2 + PAGINATION_HEIGHT + WINDOW_RADIUS);
-				ox = DEVICE_WIDTH - pw - SCALE1(PADDING);
-				oy = (DEVICE_HEIGHT - ph) / 2;
-				
-				// window
-				GFX_blitRect(ASSET_STATE_BG, screen, &(SDL_Rect){ox,oy,pw,ph});
-				ox += SCALE1(WINDOW_RADIUS);
-				oy += SCALE1(WINDOW_RADIUS);
-				
-				if (menu.preview_exists) { // has save, has preview
-					// lotta memory churn here
-					SDL_Surface* bmp = IMG_Load(menu.bmp_path);
-					SDL_Surface* raw_preview = SDL_ConvertSurface(bmp, screen->format, SDL_SWSURFACE);
-					
-					// LOG_info("raw_preview %ix%i\n", raw_preview->w,raw_preview->h);
-					
-					SDL_FillRect(preview, NULL, 0);
-					Menu_scale(raw_preview, preview);
-					SDL_BlitSurface(preview, NULL, screen, &(SDL_Rect){ox,oy});
-					SDL_FreeSurface(raw_preview);
-					SDL_FreeSurface(bmp);
-				}
-				else {
-					SDL_Rect preview_rect = {ox,oy,hw,hh};
-					SDL_FillRect(screen, &preview_rect, 0);
-					if (menu.save_exists) GFX_blitMessage(font.large, "No Preview", screen, &preview_rect);
-					else GFX_blitMessage(font.large, "Empty Slot", screen, &preview_rect);
-				}
-				
-				// pagination
-				ox += (pw-SCALE1(15*MENU_SLOT_COUNT))/2;
-				oy += hh+SCALE1(WINDOW_RADIUS);
-				for (int i=0; i<MENU_SLOT_COUNT; i++) {
-					if (i==menu.slot)GFX_blitAsset(ASSET_PAGE, NULL, screen, &(SDL_Rect){ox+SCALE1(i*15),oy});
-					else GFX_blitAsset(ASSET_DOT, NULL, screen, &(SDL_Rect){ox+SCALE1(i*15)+4,oy+SCALE1(2)});
-				}
-			}
-	
 			GFX_flip(screen);
 			dirty = 0;
 		}

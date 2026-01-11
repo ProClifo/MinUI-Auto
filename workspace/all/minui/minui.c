@@ -425,7 +425,7 @@ static Array* recents; // RecentArray
 
 static int quit = 0;
 static int can_resume = 0;
-static int should_resume = 0; // set to 1 when resuming from main menu
+static int should_resume = 0; // set to 1 on BTN_RESUME but only if can_resume==1
 static int simple_mode = 0;
 static char slot_path[256];
 
@@ -1462,8 +1462,12 @@ int main (int argc, char *argv[]) {
 	
 			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-			if (total>0 && PAD_justPressed(BTN_A)) {
-				if (can_resume) should_resume = 1;
+			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+				should_resume = 1;
+				Entry_open(top->entries->items[top->selected]);
+				dirty = 1;
+			}
+			else if (total>0 && PAD_justPressed(BTN_A)) {
 				Entry_open(top->entries->items[top->selected]);
 				total = top->entries->count;
 				dirty = 1;
@@ -1644,27 +1648,27 @@ int main (int argc, char *argv[]) {
 				}
 			
 				// buttons
-			if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-			else if (can_resume) GFX_blitButtonGroup((char*[]){ "A","RESUME",  NULL }, 0, screen, 0);
-			else GFX_blitButtonGroup((char*[]){ 
-				BTN_SLEEP==BTN_POWER?"POWER":"MENU",
-				BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
-				NULL }, 0, screen, 0);
+				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
+				else if (can_resume) GFX_blitButtonGroup((char*[]){ "X","RESUME",  NULL }, 0, screen, 0);
+				else GFX_blitButtonGroup((char*[]){ 
+					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
+					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
+					NULL }, 0, screen, 0);
 			
-					if (total==0) {
-						if (stack->count>1) {
-							GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
-						}
-					}
-					else {
-						if (stack->count>1) {
-							GFX_blitButtonGroup((char*[]){ "B","BACK", "A", can_resume ? "RESUME" : "OPEN", NULL }, 1, screen, 1);
-						}
-						else {
-							GFX_blitButtonGroup((char*[]){ "A", can_resume ? "RESUME" : "OPEN", NULL }, 0, screen, 1);
-						}
+				if (total==0) {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 					}
 				}
+				else {
+					if (stack->count>1) {
+						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+					}
+					else {
+						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
+					}
+				}
+			}
 
 			GFX_flip(screen);
 			dirty = 0;

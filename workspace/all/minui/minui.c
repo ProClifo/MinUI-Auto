@@ -1462,7 +1462,7 @@ int main (int argc, char *argv[]) {
 	
 			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
+			if (total>0 && can_resume && PAD_justReleased(BTN_A)) {
 				should_resume = 1;
 				Entry_open(top->entries->items[top->selected]);
 				dirty = 1;

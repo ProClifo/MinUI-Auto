@@ -4469,6 +4469,8 @@ static void Menu_loop(void) {
 		hdmimon();
 	}
 	
+	SDL_FreeSurface(preview);
+	
 	PAD_reset();
 
 	GFX_clearAll();

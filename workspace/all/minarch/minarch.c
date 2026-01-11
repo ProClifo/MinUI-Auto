@@ -3051,10 +3051,8 @@ static struct {
 	
 	.items = {
 		[ITEM_CONT] = "Continue",
-		[ITEM_SAVE] = "Save",
-		[ITEM_LOAD] = "Load",
 		[ITEM_OPTS] = "Options",
-		[ITEM_QUIT] = "Quit",
+		[ITEM_QUIT] = "Save & Quit",
 	}
 };
 
@@ -4382,6 +4380,7 @@ static void Menu_loop(void) {
 				}
 				break;
 				case ITEM_QUIT:
+					Menu_saveState();
 					status = STATUS_QUIT;
 					show_menu = 0;
 					quit = 1; // TODO: tmp?

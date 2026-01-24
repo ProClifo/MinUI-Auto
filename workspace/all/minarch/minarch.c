@@ -930,7 +930,6 @@ static struct Config {
 	.controls = default_button_mapping,
 	.shortcuts = (ButtonMapping[]){
 		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
-		[SHORTCUT_LOAD_STATE]			= {"Load State",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_RESET_GAME]			= {"Reset Game",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_SAVE_QUIT]			= {"Save & Quit",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scaling",		-1, BTN_ID_NONE, 0},
@@ -3005,13 +3004,12 @@ void Core_close(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
-#define MENU_SLOT_COUNT 8
+#define MENU_ITEM_COUNT 4
+#define MENU_SLOT_COUNT 1
 
 enum {
 	ITEM_CONT,
-	ITEM_SAVE,
-	ITEM_LOAD,
+	ITEM_RESET,
 	ITEM_OPTS,
 	ITEM_QUIT,
 };
@@ -3052,6 +3050,7 @@ static struct {
 	.items = {
 		[ITEM_CONT] = "Continue",
 		[ITEM_OPTS] = "Options",
+		[ITEM=RESET] = "Reset",
 		[ITEM_QUIT] = "Save & Quit",
 	}
 };
@@ -4357,8 +4356,8 @@ static void Menu_loop(void) {
 				break;
 				case ITEM_OPTS: {
 					if (simple_mode) {
-						core.reset();
-						status = STATUS_RESET;
+						Menu_saveState();
+						status = STATUS_SAVE;
 						show_menu = 0;
 					}
 					else {
@@ -4377,6 +4376,12 @@ static void Menu_loop(void) {
 						}
 						dirty = 1;
 					}
+				}
+						break;
+				case ITEM_RESET: {
+					core.reset();
+					status = STATUS_RESET;
+					show_menu = 0;
 				}
 				break;
 				case ITEM_QUIT:

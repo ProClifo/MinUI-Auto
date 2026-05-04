@@ -664,8 +664,6 @@ enum {
 };
 
 enum {
-	SHORTCUT_SAVE_STATE,
-	SHORTCUT_LOAD_STATE,
 	SHORTCUT_RESET_GAME,
 	SHORTCUT_SAVE_QUIT,
 	SHORTCUT_CYCLE_SCALE,
@@ -929,7 +927,6 @@ static struct Config {
 	},
 	.controls = default_button_mapping,
 	.shortcuts = (ButtonMapping[]){
-		[SHORTCUT_SAVE_STATE]			= {"Save State",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_RESET_GAME]			= {"Reset Game",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_SAVE_QUIT]			= {"Save & Quit",		-1, BTN_ID_NONE, 0},
 		[SHORTCUT_CYCLE_SCALE]			= {"Cycle Scaling",		-1, BTN_ID_NONE, 0},
@@ -1631,7 +1628,6 @@ static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
 static void Menu_saveState(void);
-static void Menu_loadState(void);
 
 static int setFastForward(int enable) {
 	if (!fast_forward && enable && thread_video) {
@@ -1706,8 +1702,6 @@ static void input_poll_callback(void) {
 			}
 			else if (PAD_justPressed(btn)) {
 				switch (i) {
-					case SHORTCUT_SAVE_STATE: Menu_saveState(); break;
-					case SHORTCUT_LOAD_STATE: Menu_loadState(); break;
 					case SHORTCUT_RESET_GAME: core.reset(); break;
 					case SHORTCUT_SAVE_QUIT:
 						Menu_saveState();
@@ -4152,32 +4146,6 @@ static void Menu_saveState(void) {
 	putInt(menu.slot_path, menu.slot);
 	State_write();
 }
-static void Menu_loadState(void) {
-	// LOG_info("Menu_loadState\n");
-
-	Menu_updateState();
-	
-	if (menu.save_exists) {
-		if (menu.total_discs) {
-			char slot_disc_name[256];
-			getFile(menu.txt_path, slot_disc_name, 256);
-		
-			char slot_disc_path[256];
-			if (slot_disc_name[0]=='/') strcpy(slot_disc_path, slot_disc_name);
-			else sprintf(slot_disc_path, "%s%s", menu.base_path, slot_disc_name);
-		
-			char* disc_path = menu.disc_paths[menu.disc];
-			if (!exactMatch(slot_disc_path, disc_path)) {
-				Game_changeDisc(slot_disc_path);
-			}
-		}
-	
-		state_slot = menu.slot;
-		putInt(menu.slot_path, menu.slot);
-		State_read();
-	}
-}
-
 static char* getAlias(char* path, char* alias) {
 	// LOG_info("alias path: %s\n", path);
 	char* tmp;

@@ -3149,6 +3149,88 @@ typedef struct MenuList {
 	MenuList_callback_t on_change;
 } MenuList;
 
+static int Menu_confirm(char* prompt) {
+	int selected = 0; // 0 = No, 1 = Yes
+	int dirty = 1;
+	int result = 0;
+	char* options[] = { "No", "Yes" };
+
+	while (1) {
+		GFX_startFrame();
+		PAD_poll();
+
+		if (PAD_justRepeated(BTN_LEFT) && selected > 0) {
+			selected--;
+			dirty = 1;
+		}
+		else if (PAD_justRepeated(BTN_RIGHT) && selected < 1) {
+			selected++;
+			dirty = 1;
+		}
+
+		if (PAD_justPressed(BTN_B)) {
+			result = 0;
+			break;
+		}
+		else if (PAD_justPressed(BTN_A)) {
+			result = (selected == 1);
+			break;
+		}
+
+		PWR_update(&dirty, NULL, Menu_beforeSleep, Menu_afterSleep);
+
+		if (dirty) {
+			GFX_clear(screen);
+			SDL_BlitSurface(menu.overlay, NULL, screen, NULL);
+
+			int pw = SCALE1(280);
+			int ph = SCALE1(110);
+			int px = (screen->w - pw) / 2;
+			int py = (screen->h - ph) / 2;
+
+			GFX_blitRect(ASSET_BLACK_PILL, screen, &(SDL_Rect){px, py, pw, ph});
+
+			SDL_Surface* title_text = TTF_RenderUTF8_Blended(font.medium, prompt, COLOR_WHITE);
+			SDL_BlitSurface(title_text, NULL, screen, &(SDL_Rect){
+				px + (pw - title_text->w) / 2,
+				py + SCALE1(PADDING)
+			});
+			SDL_FreeSurface(title_text);
+
+			int btn_w = SCALE1(80);
+			int gap = SCALE1(20);
+			int total_w = btn_w * 2 + gap;
+			int btn_x = px + (pw - total_w) / 2;
+			int btn_y = py + ph - SCALE1(PADDING + PILL_SIZE);
+
+			for (int i = 0; i < 2; i++) {
+				int bx = btn_x + i * (btn_w + gap);
+				int asset = (i == selected) ? ASSET_WHITE_PILL : ASSET_DARK_GRAY_PILL;
+				SDL_Color color = (i == selected) ? COLOR_BLACK : COLOR_WHITE;
+
+				GFX_blitPill(asset, screen, &(SDL_Rect){bx, btn_y, btn_w, SCALE1(PILL_SIZE)});
+
+				SDL_Surface* opt_text = TTF_RenderUTF8_Blended(font.large, options[i], color);
+				SDL_BlitSurface(opt_text, NULL, screen, &(SDL_Rect){
+					bx + (btn_w - opt_text->w) / 2,
+					btn_y + (SCALE1(PILL_SIZE) - opt_text->h) / 2
+				});
+				SDL_FreeSurface(opt_text);
+			}
+
+			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","SELECT", NULL }, 1, screen, 1);
+
+			GFX_flip(screen);
+			dirty = 0;
+		}
+		else GFX_sync();
+
+		hdmimon();
+	}
+
+	return result;
+}
+
 static int Menu_message(char* message, char** pairs) {
 	GFX_setMode(MODE_MAIN);
 	int dirty = 1;
@@ -3543,21 +3625,6 @@ static MenuList OptionSaveChanges_menu = {
 	}
 };
 
-static int reset_confirmed = 0;
-static int OptionResetConfirm_onConfirm(MenuList* list, int i) {
-	reset_confirmed = (i == 1);
-	return MENU_CALLBACK_EXIT;
-}
-static MenuList OptionResetConfirm_menu = {
-	.type = MENU_LIST,
-	.desc = "Are you sure you want to reset?",
-	.on_confirm = OptionResetConfirm_onConfirm,
-	.items = (MenuItem[]){
-		{"No"},
-		{"Yes"},
-		{NULL},
-	}
-};
 static int OptionSaveChanges_openMenu(MenuList* list, int i) {
 	OptionSaveChanges_updateDesc();
 	OptionSaveChanges_menu.desc = getSaveDesc();
@@ -4335,9 +4402,7 @@ static void Menu_loop(void) {
 				}
 						break;
 				case ITEM_RESET: {
-					reset_confirmed = 0;
-					Menu_options(&OptionResetConfirm_menu);
-					if (reset_confirmed) {
+					if (Menu_confirm("Are you sure you want to reset?")) {
 						core.reset();
 						status = STATUS_RESET;
 						show_menu = 0;

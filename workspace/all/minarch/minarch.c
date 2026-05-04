@@ -3542,6 +3542,22 @@ static MenuList OptionSaveChanges_menu = {
 		{NULL},
 	}
 };
+
+static int reset_confirmed = 0;
+static int OptionResetConfirm_onConfirm(MenuList* list, int i) {
+	reset_confirmed = (i == 1);
+	return MENU_CALLBACK_EXIT;
+}
+static MenuList OptionResetConfirm_menu = {
+	.type = MENU_LIST,
+	.desc = "Are you sure you want to reset?",
+	.on_confirm = OptionResetConfirm_onConfirm,
+	.items = (MenuItem[]){
+		{"No"},
+		{"Yes"},
+		{NULL},
+	}
+};
 static int OptionSaveChanges_openMenu(MenuList* list, int i) {
 	OptionSaveChanges_updateDesc();
 	OptionSaveChanges_menu.desc = getSaveDesc();
@@ -4319,9 +4335,16 @@ static void Menu_loop(void) {
 				}
 						break;
 				case ITEM_RESET: {
-					core.reset();
-					status = STATUS_RESET;
-					show_menu = 0;
+					reset_confirmed = 0;
+					Menu_options(&OptionResetConfirm_menu);
+					if (reset_confirmed) {
+						core.reset();
+						status = STATUS_RESET;
+						show_menu = 0;
+					}
+					else {
+						dirty = 1;
+					}
 				}
 				break;
 				case ITEM_QUIT:

@@ -1462,7 +1462,11 @@ int main (int argc, char *argv[]) {
 	
 			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-			if (total>0 && can_resume && PAD_justReleased(BTN_A)) {
+			// Resume the instant A or X is pressed when a save state exists. Tying
+			// resume to the press (not the release) means opening a folder consumes
+			// the event in one branch, so the now-stale release can't fire against
+			// the entry that became selected inside.
+			if (total>0 && can_resume && (PAD_justPressed(BTN_A) || PAD_justPressed(BTN_RESUME))) {
 				should_resume = 1;
 				Entry_open(top->entries->items[top->selected]);
 				dirty = 1;
@@ -1649,20 +1653,30 @@ int main (int argc, char *argv[]) {
 			
 				// buttons
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-				else if (can_resume) GFX_blitButtonGroup((char*[]){ "A","RESUME",  NULL }, 0, screen, 0);
-				else GFX_blitButtonGroup((char*[]){ 
+				else GFX_blitButtonGroup((char*[]){
 					BTN_SLEEP==BTN_POWER?"POWER":"MENU",
-					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",  
+					BTN_SLEEP==BTN_POWER||simple_mode?"SLEEP":"INFO",
 					NULL }, 0, screen, 0);
-			
+
 				if (total==0) {
 					if (stack->count>1) {
 						GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
 					}
 				}
 				else {
+					// The menu/power hint stays anchored to the bottom-left, so
+					// every entry action sits on the right to keep the two groups
+					// from overlapping.
 					if (stack->count>1) {
-						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+						if (can_resume) {
+							GFX_blitButtonGroup((char*[]){ "B","BACK", "A","RESUME", NULL }, 0, screen, 1);
+						}
+						else {
+							GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+						}
+					}
+					else if (can_resume) {
+						GFX_blitButtonGroup((char*[]){ "A","RESUME", NULL }, 0, screen, 1);
 					}
 					else {
 						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);

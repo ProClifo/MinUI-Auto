@@ -1688,6 +1688,7 @@ static void Menu_beforeSleep(void);
 static void Menu_afterSleep(void);
 
 static void Menu_saveState(void);
+static void Menu_quickSave(void);
 
 static int setFastForward(int enable) {
 	if (!fast_forward && enable && thread_video) {
@@ -1764,7 +1765,7 @@ static void input_poll_callback(void) {
 				switch (i) {
 					case SHORTCUT_RESET_GAME: core.reset(); break;
 					case SHORTCUT_SAVE_QUIT:
-						Menu_saveState();
+						Menu_quickSave();
 						quit = 1;
 						break;
 					case SHORTCUT_CYCLE_SCALE:
@@ -4289,6 +4290,16 @@ static void Menu_saveState(void) {
 	putInt(menu.slot_path, menu.slot);
 	State_write();
 }
+// Save-and-quit, low-battery, interval and power-off paths all converge on the
+// auto resume slot so the launch menu's Resume always points at the freshest
+// auto-save, regardless of which manual slot the player was using.
+static void Menu_quickSave(void) {
+	int prev_slot = menu.slot;
+	menu.slot = AUTO_RESUME_SLOT;
+	Menu_saveState();
+	menu.slot = prev_slot;
+	last_autosave_ms = SDL_GetTicks();
+}
 static char* getAlias(char* path, char* alias) {
 	// LOG_info("alias path: %s\n", path);
 	char* tmp;
@@ -4473,7 +4484,7 @@ static void Menu_loop(void) {
 				}
 				break;
 				case ITEM_QUIT:
-					Menu_saveState();
+					Menu_quickSave();
 					status = STATUS_QUIT;
 					show_menu = 0;
 					quit = 1; // TODO: tmp?

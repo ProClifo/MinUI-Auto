@@ -1462,7 +1462,13 @@ int main (int argc, char *argv[]) {
 	
 			if (dirty && total>0) readyResume(top->entries->items[top->selected]);
 
-			if (total>0 && can_resume && (PAD_justReleased(BTN_A) || PAD_justReleased(BTN_RESUME))) {
+			// Only treat A or X as a resume trigger when the press and release land
+			// in the same poll — a "quick tap". Holding A on a directory opens it,
+			// and a stale just_released on the next frame would otherwise re-fire
+			// against whatever entry is now selected inside that directory.
+			int a_quick_tap = PAD_justPressed(BTN_A) && PAD_justReleased(BTN_A);
+			int x_quick_tap = PAD_justPressed(BTN_RESUME) && PAD_justReleased(BTN_RESUME);
+			if (total>0 && can_resume && (a_quick_tap || x_quick_tap)) {
 				should_resume = 1;
 				Entry_open(top->entries->items[top->selected]);
 				dirty = 1;

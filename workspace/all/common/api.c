@@ -1535,26 +1535,61 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 		if (before_sleep) before_sleep();
 		PWR_powerOff();
 	}
-	
+
 	if (PAD_justPressed(BTN_POWER)) {
 		power_pressed_at = now;
 	}
-	
+
+	// TrimUI Smart has a physical power switch in place of a soft power-off,
+	// so the home button is overloaded: a single tap still puts the device to
+	// sleep, but a double tap saves the game and exits to the launcher so the
+	// player can flip the switch with their state preserved.
+	#define TRIMUI_DOUBLE_TAP_MS 500
+	static uint32_t menu_first_release_at = 0;
+	static int swallow_next_sleep_release = 0;
+	int trimui_smart = !strcmp(PLATFORM, "trimuismart");
+	int sleep_pressed = PAD_justReleased(BTN_SLEEP);
+
+	if (trimui_smart) {
+		if (sleep_pressed && swallow_next_sleep_release) {
+			swallow_next_sleep_release = 0;
+			sleep_pressed = 0;
+		}
+		if (sleep_pressed) {
+			if (menu_first_release_at && now - menu_first_release_at < TRIMUI_DOUBLE_TAP_MS) {
+				menu_first_release_at = 0;
+				if (before_sleep) before_sleep();
+				PWR_powerOff();
+				sleep_pressed = 0;
+			}
+			else {
+				menu_first_release_at = now;
+				sleep_pressed = 0;
+			}
+		}
+		else if (menu_first_release_at && now - menu_first_release_at >= TRIMUI_DOUBLE_TAP_MS) {
+			menu_first_release_at = 0;
+			sleep_pressed = 1;
+		}
+	}
+
 	#define SLEEP_DELAY 30000 // 30 seconds
 	if (now-last_input_at>=SLEEP_DELAY && PWR_preventAutosleep()) last_input_at = now;
-	
+
 	if (
 		pwr.requested_sleep || // hardware requested sleep
 		now-last_input_at>=SLEEP_DELAY || // autosleep
-		(pwr.can_sleep && PAD_justReleased(BTN_SLEEP)) // manual sleep
+		(pwr.can_sleep && sleep_pressed) // manual sleep
 	) {
 		pwr.requested_sleep = 0;
 		if (before_sleep) before_sleep();
 		PWR_fauxSleep();
 		if (after_sleep) after_sleep();
-		
+
 		last_input_at = now = SDL_GetTicks();
 		power_pressed_at = 0;
+		menu_first_release_at = 0;
+		swallow_next_sleep_release = trimui_smart;
 		dirty = 1;
 	}
 	

@@ -4450,7 +4450,7 @@ static void Menu_loop(void) {
 				
 				case ITEM_OPTS: {
 					if (simple_mode) {
-						Menu_saveState();
+						Menu_quickSave();
 						status = STATUS_SAVE;
 						show_menu = 0;
 					}

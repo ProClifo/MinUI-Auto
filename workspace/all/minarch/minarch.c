@@ -52,6 +52,7 @@ static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
 static int fast_forward = 0;
 static int overclock = 1; // normal
+static int autosave_interval = 0; // index into autosave_interval_labels
 static int has_custom_controllers = 0;
 static int gamepad_type = 0; // index in gamepad_labels/gamepad_values
 static int downsample = 0; // set to 1 to convert from 8888 to 565
@@ -574,12 +575,21 @@ static void State_autosave(void) {
 }
 static void State_resume(void) {
 	if (!exists(RESUME_SLOT_PATH)) return;
-	
+
 	int last_state_slot = state_slot;
 	state_slot = getInt(RESUME_SLOT_PATH);
 	unlink(RESUME_SLOT_PATH);
 	State_read();
 	state_slot = last_state_slot;
+}
+
+// Tracks when the last automatic save (interval, low-battery, power-off)
+// fired so the interval timer can re-arm against wall-clock time.
+static uint32_t last_autosave_ms = 0;
+
+static void Game_autoSave(void) {
+	State_autosave();
+	last_autosave_ms = SDL_GetTicks();
 }
 
 ///////////////////////////////
@@ -648,6 +658,21 @@ static char* max_ff_labels[] = {
 	"8x",
 	NULL,
 };
+static char* autosave_interval_labels[] = {
+	"Off",
+	"10 seconds",
+	"30 seconds",
+	"1 minute",
+	"5 minutes",
+	NULL,
+};
+static int autosave_interval_ms[] = {
+	0,
+	10 * 1000,
+	30 * 1000,
+	60 * 1000,
+	5 * 60 * 1000,
+};
 
 ///////////////////////////////
 
@@ -660,6 +685,7 @@ enum {
 	FE_OPT_THREAD,
 	FE_OPT_DEBUG,
 	FE_OPT_MAXFF,
+	FE_OPT_AUTOSAVE_INTERVAL,
 	FE_OPT_COUNT,
 };
 
@@ -916,6 +942,16 @@ static struct Config {
 				.values = max_ff_labels,
 				.labels = max_ff_labels,
 			},
+			[FE_OPT_AUTOSAVE_INTERVAL] = {
+				.key	= "minarch_autosave_interval",
+				.name	= "Auto-Save Interval",
+				.desc	= "Automatically save the game at the\nselected interval. Uses the auto save\nslot, separate from manual slots.",
+				.default_value = 0, // Off (overridden per-platform in Config_load)
+				.value = 0,
+				.count = 5,
+				.values = autosave_interval_labels,
+				.labels = autosave_interval_labels,
+			},
 			[FE_OPT_COUNT] = {NULL}
 		}
 	},
@@ -1011,6 +1047,11 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_MAXFF].key)) {
 		max_ff_speed = value;
 		i = FE_OPT_MAXFF;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_AUTOSAVE_INTERVAL].key)) {
+		autosave_interval = value;
+		last_autosave_ms = SDL_GetTicks();
+		i = FE_OPT_AUTOSAVE_INTERVAL;
 	}
 	if (i==-1) return;
 	Option* option = &config.frontend.options[i];
@@ -1198,6 +1239,15 @@ static void Config_load(void) {
 	scaling_option->count = getScreenScalingCount();
 	if (!GFX_supportsOverscan()) {
 		scaling_labels[3] = NULL;
+	}
+
+	// TrimUI Smart has a physical power switch with no soft poweroff,
+	// so default the autosave interval to 5 minutes there.
+	if (!strcmp(PLATFORM, "trimuismart")) {
+		Option* autosave_option = &config.frontend.options[FE_OPT_AUTOSAVE_INTERVAL];
+		autosave_option->default_value = 4; // 5 minutes
+		autosave_option->value = 4;
+		autosave_interval = 4;
 	}
 	
 	char* system_path = SYSTEM_PATH "/system.cfg";
@@ -4731,13 +4781,21 @@ int main(int argc , char* argv[]) {
 	Special_init(); // after config
 	
 	sec_start = SDL_GetTicks();
+	last_autosave_ms = sec_start;
 	while (!quit) {
 		GFX_startFrame();
-		
+
 		if (!thread_video) {
 			core.run();
 			limitFF();
 			trackFPS();
+		}
+
+		if (!show_menu && autosave_interval > 0) {
+			uint32_t now_ms = SDL_GetTicks();
+			if (now_ms - last_autosave_ms >= (uint32_t)autosave_interval_ms[autosave_interval]) {
+				Game_autoSave();
+			}
 		}
 
 		if (thread_video && !quit) {

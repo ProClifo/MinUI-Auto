@@ -1667,10 +1667,18 @@ int main (int argc, char *argv[]) {
 					}
 				}
 				else {
+					// When a save state exists, A is already advertised as RESUME by
+					// the upper-left hint, so the lower OPEN hint is suppressed to
+					// avoid showing two different actions for the same button.
 					if (stack->count>1) {
-						GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+						if (can_resume) {
+							GFX_blitButtonGroup((char*[]){ "B","BACK", NULL }, 0, screen, 1);
+						}
+						else {
+							GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OPEN", NULL }, 1, screen, 1);
+						}
 					}
-					else {
+					else if (!can_resume) {
 						GFX_blitButtonGroup((char*[]){ "A","OPEN", NULL }, 0, screen, 1);
 					}
 				}

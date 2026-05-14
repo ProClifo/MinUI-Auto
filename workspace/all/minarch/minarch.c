@@ -587,6 +587,16 @@ static void State_resume(void) {
 // fired so the interval timer can re-arm against wall-clock time.
 static uint32_t last_autosave_ms = 0;
 
+// Mirrors the five spec'd low-battery checkpoints (5/4/3/2/1 %). Platforms
+// only report battery in coarse 10-20% buckets, so the count is satisfied by
+// firing one save on entering the low bucket and four more at 1-minute steps
+// while the device stays in that bucket without charging.
+#define LOW_BATTERY_SAVE_COUNT 5
+#define LOW_BATTERY_SAVE_INTERVAL_MS (60 * 1000)
+static int low_battery_save_active = 0;
+static int low_battery_save_count = 0;
+static uint32_t low_battery_last_save_ms = 0;
+
 static void Game_autoSave(void) {
 	State_autosave();
 	last_autosave_ms = SDL_GetTicks();
@@ -4796,6 +4806,32 @@ int main(int argc , char* argv[]) {
 			if (now_ms - last_autosave_ms >= (uint32_t)autosave_interval_ms[autosave_interval]) {
 				Game_autoSave();
 			}
+		}
+
+		if (!show_menu && !PWR_isCharging()) {
+			uint32_t now_ms = SDL_GetTicks();
+			if (PWR_getBattery() <= PWR_LOW_CHARGE) {
+				if (!low_battery_save_active) {
+					low_battery_save_active = 1;
+					low_battery_save_count = 1;
+					low_battery_last_save_ms = now_ms;
+					Game_autoSave();
+				}
+				else if (low_battery_save_count < LOW_BATTERY_SAVE_COUNT &&
+				         now_ms - low_battery_last_save_ms >= LOW_BATTERY_SAVE_INTERVAL_MS) {
+					low_battery_save_count += 1;
+					low_battery_last_save_ms = now_ms;
+					Game_autoSave();
+				}
+			}
+			else if (low_battery_save_active) {
+				low_battery_save_active = 0;
+				low_battery_save_count = 0;
+			}
+		}
+		else if (low_battery_save_active && PWR_isCharging()) {
+			low_battery_save_active = 0;
+			low_battery_save_count = 0;
 		}
 
 		if (thread_video && !quit) {

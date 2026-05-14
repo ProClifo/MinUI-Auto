@@ -450,16 +450,38 @@ void ADC_quit(void) {
 
 ///////////////////////////////
 
+// led1/led2/led3 are the three channels of the tri-color status LED.
+// Swap these paths if a hardware test shows the channels mapped differently.
+#define LED_R_PATH "/sys/devices/platform/sunxi-led/leds/led1/brightness"
+#define LED_G_PATH "/sys/devices/platform/sunxi-led/leds/led2/brightness"
+#define LED_B_PATH "/sys/devices/platform/sunxi-led/leds/led3/brightness"
+
+static int led_backlight_on = 1;
+
+static void set_led_rgb(int r, int g, int b) {
+	putInt(LED_R_PATH, r);
+	putInt(LED_G_PATH, g);
+	putInt(LED_B_PATH, b);
+}
+
+static void update_battery_led(int is_charging, int charge) {
+	if (!led_backlight_on) return; // sleep state owns the LED (white via leds_on)
+	if (is_charging && charge>=100)      set_led_rgb(0,   255, 0);   // green: charging and high
+	else if (is_charging)                set_led_rgb(255, 128, 0);   // orange: charging
+	else if (charge<=PWR_LOW_CHARGE)     set_led_rgb(255, 0,   0);   // red: low battery
+	else                                 set_led_rgb(0,   0,   0);   // off
+}
+
 #define USB_SPEED "/sys/devices/platform/sunxi_usb_udc/udc/sunxi_usb_udc/current_speed"
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	// *is_charging = 0;
 	// *charge = PWR_LOW_CHARGE;
 	// return;
-	
+
 	char value[16]; memset(value, 0, 16);
 	getFile(USB_SPEED, value, 16);
 	*is_charging = !exactMatch(value, "UNKNOWN\n");
-	
+
 	int i = ADC_read();
 	// worry less about battery and more about the game you're playing
 	     if (i>43) *charge = 100;
@@ -468,18 +490,22 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	else if (i>39) *charge =  40;
 	else if (i>38) *charge =  20;
 	else           *charge =  10;
+
+	update_battery_led(*is_charging, *charge);
 }
 
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
 		// TODO: restore screen
 		SetBrightness(GetBrightness());
+		led_backlight_on = 1;
 		system("leds_off");
 	}
 	else {
 		// TODO: copy screen
 		// TODO: clear screen
 		SetRawBrightness(0);
+		led_backlight_on = 0;
 		system("leds_on");
 	}
 }

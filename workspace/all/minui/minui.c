@@ -1316,10 +1316,11 @@ int main (int argc, char *argv[]) {
 	// LOG_info("- input init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	PWR_init();
-	// Devices without a dedicated power button (such as TrimUI Smart) rely on
-	// the home button as the only manual sleep trigger from the launcher, so
-	// leave PWR_update's standard sleep path enabled instead of gating it
-	// behind the version-info toggle.
+	// TrimUI Smart maps BTN_SLEEP to the home button, so the launcher must let
+	// the standard PWR_update sleep path through it; other no-power-button
+	// devices keep the upstream behaviour where the home button toggles the
+	// version overlay and only sleeps once it's visible.
+	if (!HAS_POWER_BUTTON && !simple_mode && strcmp(PLATFORM, "trimuismart") != 0) PWR_disableSleep();
 	// LOG_info("- power init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	SDL_Surface* version = NULL;

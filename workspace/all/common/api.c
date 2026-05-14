@@ -1540,40 +1540,24 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 		power_pressed_at = now;
 	}
 
-	// TrimUI Smart has a physical power switch in place of a soft power-off,
-	// so the home button is overloaded: a single tap still puts the device to
-	// sleep, but a double tap saves the game and exits to the launcher so the
-	// player can flip the switch with their state preserved.
+	// TrimUI Smart overloads the home button: a single tap is reserved for the
+	// in-game menu, so manual sleep only fires on a double tap within a short
+	// window. The standard sleep block below picks it up via pwr.requested_sleep
+	// and runs before_sleep, which saves state before the device suspends.
 	#define TRIMUI_DOUBLE_TAP_MS 500
 	static uint32_t menu_first_release_at = 0;
-	static int swallow_next_sleep_release = 0;
 	int trimui_smart = !strcmp(PLATFORM, "trimuismart");
 	int sleep_pressed = PAD_justReleased(BTN_SLEEP);
 
-	// The launcher passes a NULL before_sleep callback because it has no game
-	// to save, so the double-tap detour only belongs in callers that can persist
-	// state (minarch in-game and in-menu).
-	if (trimui_smart && before_sleep) {
-		if (sleep_pressed && swallow_next_sleep_release) {
-			swallow_next_sleep_release = 0;
-			sleep_pressed = 0;
-		}
-		if (sleep_pressed) {
-			if (menu_first_release_at && now - menu_first_release_at < TRIMUI_DOUBLE_TAP_MS) {
-				menu_first_release_at = 0;
-				if (before_sleep) before_sleep();
-				PWR_powerOff();
-				sleep_pressed = 0;
-			}
-			else {
-				menu_first_release_at = now;
-				sleep_pressed = 0;
-			}
-		}
-		else if (menu_first_release_at && now - menu_first_release_at >= TRIMUI_DOUBLE_TAP_MS) {
+	if (trimui_smart && before_sleep && sleep_pressed) {
+		if (menu_first_release_at && now - menu_first_release_at < TRIMUI_DOUBLE_TAP_MS) {
 			menu_first_release_at = 0;
-			sleep_pressed = 1;
+			pwr.requested_sleep = 1;
 		}
+		else {
+			menu_first_release_at = now;
+		}
+		sleep_pressed = 0;
 	}
 
 	#define SLEEP_DELAY 30000 // 30 seconds
@@ -1592,7 +1576,6 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 		last_input_at = now = SDL_GetTicks();
 		power_pressed_at = 0;
 		menu_first_release_at = 0;
-		swallow_next_sleep_release = trimui_smart;
 		dirty = 1;
 	}
 	

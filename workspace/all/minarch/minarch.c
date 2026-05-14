@@ -1061,6 +1061,9 @@ static void Config_syncFrontend(char* key, int value) {
 	else if (exactMatch(key,config.frontend.options[FE_OPT_AUTOSAVE_INTERVAL].key)) {
 		autosave_interval = value;
 		last_autosave_ms = SDL_GetTicks();
+		// Persist outside the regular config file so the safety-net interval
+		// survives across sessions without requiring an explicit Save Changes.
+		putInt(AUTOSAVE_INTERVAL_PATH, value);
 		i = FE_OPT_AUTOSAVE_INTERVAL;
 	}
 	if (i==-1) return;
@@ -1253,11 +1256,21 @@ static void Config_load(void) {
 
 	// TrimUI Smart has a physical power switch with no soft poweroff,
 	// so default the autosave interval to 5 minutes there.
+	Option* autosave_option = &config.frontend.options[FE_OPT_AUTOSAVE_INTERVAL];
 	if (!strcmp(PLATFORM, "trimuismart")) {
-		Option* autosave_option = &config.frontend.options[FE_OPT_AUTOSAVE_INTERVAL];
 		autosave_option->default_value = 4; // 5 minutes
 		autosave_option->value = 4;
 		autosave_interval = 4;
+	}
+	// A previously chosen interval lives outside the per-game/per-console
+	// config so it survives reboots without forcing the player through Save
+	// Changes — the spec treats this as a persistent safety-net setting.
+	if (exists(AUTOSAVE_INTERVAL_PATH)) {
+		int saved = getInt(AUTOSAVE_INTERVAL_PATH);
+		if (saved >= 0 && saved < autosave_option->count) {
+			autosave_option->value = saved;
+			autosave_interval = saved;
+		}
 	}
 	
 	char* system_path = SYSTEM_PATH "/system.cfg";

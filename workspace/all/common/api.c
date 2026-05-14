@@ -1550,7 +1550,10 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 	int trimui_smart = !strcmp(PLATFORM, "trimuismart");
 	int sleep_pressed = PAD_justReleased(BTN_SLEEP);
 
-	if (trimui_smart) {
+	// The launcher passes a NULL before_sleep callback because it has no game
+	// to save, so the double-tap detour only belongs in callers that can persist
+	// state (minarch in-game and in-menu).
+	if (trimui_smart && before_sleep) {
 		if (sleep_pressed && swallow_next_sleep_release) {
 			swallow_next_sleep_release = 0;
 			sleep_pressed = 0;
